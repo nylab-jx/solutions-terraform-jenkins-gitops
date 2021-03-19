@@ -21,6 +21,7 @@
 module "enables-google-apis" {
   source  = "terraform-google-modules/project-factory/google//modules/project_services"
   version = "6.0.0"
+  force_destroy = true
 
   project_id = var.project_id
 
@@ -36,12 +37,15 @@ module "enables-google-apis" {
   ]
 }
 
+
+
 /*****************************************
   Jenkins VPC
  *****************************************/
 module "jenkins-vpc" {
   source  = "terraform-google-modules/network/google"
   version = "~> 2.0"
+  force_destroy = true
 
   project_id   = module.enables-google-apis.project_id
   network_name = var.network_name
@@ -74,6 +78,7 @@ module "jenkins-vpc" {
 module "jenkins-gke" {
   source                   = "terraform-google-modules/kubernetes-engine/google//modules/beta-public-cluster/"
   version                  = "~> 7.0"
+  force_destroy = true
   project_id               = module.enables-google-apis.project_id
   name                     = "jenkins"
   regional                 = false
@@ -106,6 +111,7 @@ module "jenkins-gke" {
 resource "google_project_iam_member" "gke" {
   project = module.enables-google-apis.project_id
   role    = "roles/storage.objectViewer"
+  force_destroy = true
 
   member = "serviceAccount:${module.jenkins-gke.service_account}"
 }
@@ -116,6 +122,7 @@ resource "google_project_iam_member" "gke" {
 module "workload_identity" {
   source              = "terraform-google-modules/kubernetes-engine/google//modules/workload-identity"
   version             = "~> 7.0"
+  force_destroy = true
   project_id          = module.enables-google-apis.project_id
   name                = "jenkins-wi-${module.jenkins-gke.name}"
   namespace           = "default"
@@ -145,6 +152,7 @@ resource "kubernetes_secret" "jenkins-secrets" {
     ca_certificate      = module.jenkins-gke.ca_certificate
     jenkins_tf_ksa      = module.workload_identity.k8s_service_account_name
   }
+  force_destroy = true
 }
 
 /*****************************************
@@ -159,6 +167,7 @@ resource "kubernetes_secret" "gh-secrets" {
     github_repo     = var.github_repo
     github_token    = var.github_token
   }
+  force_destroy = true
 }
 
 /*****************************************
@@ -169,6 +178,7 @@ resource "google_storage_bucket_iam_member" "tf-state-writer" {
   bucket = var.tfstate_gcs_backend
   role   = "roles/storage.admin"
   member = module.workload_identity.gcp_service_account_fqn
+  force_destroy = true
 }
 
 /*****************************************
@@ -179,7 +189,7 @@ resource "google_project_iam_member" "jenkins-project" {
   role    = "roles/editor"
 
   member = module.workload_identity.gcp_service_account_fqn
-
+  force_destroy = true
 }
 
 data "local_file" "helm_chart_values" {
@@ -192,6 +202,7 @@ resource "helm_release" "jenkins" {
   chart      = "jenkins"
   version    = "1.9.18"
   timeout    = 1200
+  force_destroy = true
 
   values = [data.local_file.helm_chart_values.content]
 
